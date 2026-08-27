@@ -5,5 +5,8 @@
 # Crunchy Jump
 8-Bit Platformer with a Toast.
 
-Runs in the Browser on Desktop and Mobile, try it out: \
+Runs in the Browser on PC and Mobile, try it out: \
 https://crunchy-jump.knuspii.net/
+
+- Random generating platforms and items
+- Can you reach a score of 1000?
