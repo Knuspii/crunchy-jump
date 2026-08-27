@@ -38,58 +38,41 @@ __lua__
 -- 03 = coin
 -- 04 = platform broken
 
-
 function _init()
-
     mode="menu"
-
     setup_game()
-
 end
-
 
 --------------------------------------------------
 -- SETUP GAME
 --------------------------------------------------
 
 function setup_game()
-
     player={
         x=56,
         y=100,
-
         w=16,
         h=16,
-
         hw=12,
         hh=14,
-
         dx=0,
         dy=0,
         sprite=2
     }
 
-
     gravity=0.25
-
     normal_jump=-5.5
     boost_jump=-8.5
-
     jump=normal_jump
-
     camera_y=0
-
     height_score=0
     coin_score=0
     score=0
-
     game_over=false
-
     platforms={}
     particles={}
     items={}
     clouds={}
-
 
     ------------------------------------------------
     -- CLOUDS
@@ -97,22 +80,18 @@ function setup_game()
 
     setup_clouds()
 
-
     ------------------------------------------------
     -- GAME START GROUND
     ------------------------------------------------
 
     if mode=="game" then
-
         add_platform(
             0,
             120,
             128,
             "ground"
         )
-
     end
-
 
     ------------------------------------------------
     -- GAME PLATFORMS
@@ -120,36 +99,22 @@ function setup_game()
 
     local y=95
 
-
     for i=1,20 do
-
         local pw=16
         local px=flr(rnd(113))
-
         local type="normal"
 
-
         if rnd(1)<0.25 then
-
             local r=flr(rnd(3))
 
-
             if r==0 then
-
                 type="broken1"
-
             elseif r==1 then
-
                 type="broken2"
-
             else
-
                 type="broken3"
-
             end
-
         end
-
 
         add_platform(
             px,
@@ -158,31 +123,23 @@ function setup_game()
             type
         )
 
-
         y-=20
-
     end
-
 
     ------------------------------------------------
     -- MENU SETUP
     ------------------------------------------------
 
     if mode=="menu" then
-
         setup_menu()
-
     end
-
 end
-
 
 --------------------------------------------------
 -- CLOUD SETUP
 --------------------------------------------------
 
 function setup_clouds()
-
     clouds={}
 
     local cloud_sprites={
@@ -193,83 +150,60 @@ function setup_clouds()
     }
 
     for i=1,12 do
-
         add(
             clouds,
             {
                 x=flr(rnd(128)),
-
                 -- position relative to camera
                 offset_y=flr(rnd(220))-60,
-
                 sprite=cloud_sprites[
                     flr(rnd(4))+1
                 ],
-
                 -- horizontal speed
                 dx=0.15+rnd(0.35)
             }
         )
-
     end
-
 end
-
 
 --------------------------------------------------
 -- UPDATE CLOUDS
 --------------------------------------------------
 
 function update_clouds()
-
     for cloud in all(clouds) do
-
         ------------------------------------------------
         -- HORIZONTAL MOVEMENT
         ------------------------------------------------
 
         cloud.x+=cloud.dx
 
-
         if cloud.x>128 then
-
             cloud.x=-32
-
         end
-
 
         ------------------------------------------------
         -- KEEP CLOUDS AROUND CAMERA
         ------------------------------------------------
 
         if cloud.offset_y>180 then
-
             cloud.offset_y=
                 -60+rnd(40)
-
         end
-
 
         if cloud.offset_y<-80 then
-
             cloud.offset_y=
                 140+rnd(60)
-
         end
-
     end
-
 end
-
 
 --------------------------------------------------
 -- DRAW CLOUDS
 --------------------------------------------------
 
 function draw_clouds()
-
     for cloud in all(clouds) do
-
         spr(
             cloud.sprite,
             cloud.x,
@@ -277,114 +211,78 @@ function draw_clouds()
             2,
             2
         )
-
     end
-
 end
-
 
 --------------------------------------------------
 -- START GAME
 --------------------------------------------------
 
 function start_game()
-
     mode="game"
-
     setup_game()
-
 end
-
 
 --------------------------------------------------
 -- PLATFORM
 --------------------------------------------------
 
 function add_platform(x,y,w,type)
-
     local p={
-
         x=x,
         y=y,
-
         w=w,
         h=16,
-
         type=type
-
     }
-
 
     add(
         platforms,
         p
     )
 
-
     ------------------------------------------------
     -- NO ITEMS IN MENU
     ------------------------------------------------
 
     if mode=="menu" then
-
         return
-
     end
-
 
     ------------------------------------------------
     -- GROUND
     ------------------------------------------------
 
     if type=="ground" then
-
         return
-
     end
-
 
     ------------------------------------------------
     -- ITEM CHANCE
     ------------------------------------------------
 
     if rnd(1)<0.30 then
-
         spawn_item(p)
-
     end
-
 end
-
 
 --------------------------------------------------
 -- ITEM
 --------------------------------------------------
 
 function spawn_item(p)
-
     local r=rnd(1)
-
     local type
 
-
     if r<0.15 then
-
         type="spike1"
-
     elseif r<0.30 then
-
         type="spike2"
-
     elseif r<0.65 then
-
         type="coin"
-
     else
-
         type="boost"
-
     end
-
 
     ------------------------------------------------
     -- ITEM 8x8
@@ -393,23 +291,15 @@ function spawn_item(p)
     local ix=
         p.x+flr(rnd(9))
 
-
     add(items,{
-
         x=ix,
         y=p.y-8,
-
         w=8,
         h=8,
-
         type=type,
-
         platform=p
-
     })
-
 end
-
 
 --------------------------------------------------
 -- PARTICLES
@@ -423,253 +313,160 @@ function add_particle(
     col,
     life
 )
-
     add(particles,{
-
         x=x,
         y=y,
-
         dx=dx,
         dy=dy,
-
         col=col,
-
         life=life,
         maxlife=life
-
     })
-
 end
-
 
 function jump_particles(x,y)
-
     for i=1,7 do
-
         local side=1
 
-
         if i%2==0 then
-
             side=-1
-
         end
 
-
         add_particle(
-
             x+8+side*flr(rnd(4)),
             y+15,
-
             side*(0.3+rnd(0.8)),
             -0.3-rnd(0.8),
-
             7,
-
             10+flr(rnd(8))
-
         )
-
     end
-
 end
 
-
---------------------------------------------------
--- BOOST PARTICLES
---------------------------------------------------
-
 function boost_particles(x,y)
-
     for i=1,60 do
-
         local a=rnd(1)*6.28
         local spd=0.5+rnd(2)
 
-
         add_particle(
-
             x+8,
             y+8,
-
             cos(a)*spd,
             sin(a)*spd-1,
-
             10,
-
             15+flr(rnd(15))
-
         )
-
     end
-
 end
-
 
 function broken_particles(x,y)
-
-    for i=1,14 do
-
+    for i=1,60 do
         add_particle(
-
             x+8+rnd(16)-8,
             y+8+rnd(12)-6,
-
             rnd(2)-1,
             -1-rnd(2),
-
             11,
-
             12+flr(rnd(10))
-
         )
-
     end
-
 end
-
 
 --------------------------------------------------
 -- PARTICLES UPDATE
 --------------------------------------------------
 
 function update_particles()
-
     for p in all(particles) do
-
         p.x+=p.dx
         p.y+=p.dy
-
         p.dy+=0.12
-
         p.life-=1
 
-
         if p.life<=0 then
-
             del(
                 particles,
                 p
             )
-
         end
-
     end
-
 end
-
 
 function draw_particles()
-
     for p in all(particles) do
-
         if p.life>p.maxlife*0.5 then
-
             pset(
                 p.x,
                 p.y,
                 p.col
             )
-
         elseif p.life%2==0 then
-
             pset(
                 p.x,
                 p.y,
                 p.col
             )
-
         end
-
     end
-
 end
-
 
 --------------------------------------------------
 -- UPDATE
 --------------------------------------------------
 
 function _update()
-
     ------------------------------------------------
     -- CLOUDS
     ------------------------------------------------
 
     update_clouds()
 
-
     ------------------------------------------------
     -- MENU
     ------------------------------------------------
 
     if mode=="menu" then
-
         update_menu()
-
         update_particles()
-
         return
-
     end
-
 
     ------------------------------------------------
     -- GAME OVER
     ------------------------------------------------
 
     if mode=="gameover" then
-
         update_particles()
 
-
         if btnp(❎) then
-
             mode="menu"
-
             setup_game()
-
         end
 
-
         return
-
     end
-
 
     ------------------------------------------------
     -- GAME
     ------------------------------------------------
 
     update_player()
-
     update_camera()
-
     update_platforms()
-
     update_items()
-
     update_particles()
-
 
     ------------------------------------------------
     -- FALL OUT OF SCREEN
     ------------------------------------------------
 
     if player.y-camera_y>128-16 then
-
         game_over=true
-
         mode="gameover"
-
         player.sprite=6
-
         sfx(1)
-
         return
-
     end
-
 
     ------------------------------------------------
     -- HEIGHT SCORE
@@ -680,135 +477,96 @@ function _update()
         flr(-camera_y/10)
     )
 
-
     score=
         height_score+
         coin_score
-
 end
-
 
 --------------------------------------------------
 -- MENU UPDATE
 --------------------------------------------------
 
 function update_menu()
-
     ------------------------------------------------
     -- HORIZONTAL MOVEMENT
     ------------------------------------------------
 
     player.dx*=0.82
-
     player.x+=player.dx
-
 
     ------------------------------------------------
     -- SCREEN WRAP
     ------------------------------------------------
 
     if player.x < -player.w then
-
         player.x=128
-
     end
-
 
     if player.x > 128 then
-
         player.x=-player.w
-
     end
-
 
     ------------------------------------------------
     -- GRAVITY
     ------------------------------------------------
 
     player.dy+=gravity
-
     player.y+=player.dy
-
 
     ------------------------------------------------
     -- SPRITE
     ------------------------------------------------
 
     if player.dy < -0.5 then
-
         player.sprite=0
-
     elseif player.dy > 0.5 then
-
         player.sprite=4
-
     else
-
         player.sprite=2
-
     end
-
 
     ------------------------------------------------
     -- NO PLATFORM COLLISION
     ------------------------------------------------
 
     if player.y>104 then
-
         player.y=104
-
         player.dy=normal_jump
-
         player.sprite=2
-
 
         jump_particles(
             player.x,
             player.y
         )
-
     end
-
 
     ------------------------------------------------
     -- START
     ------------------------------------------------
 
     if btnp(❎) then
-
         start_game()
-
     end
-
 end
-
 
 --------------------------------------------------
 -- PLAYER
 --------------------------------------------------
 
 function update_player()
-
     ------------------------------------------------
     -- MOVEMENT
     ------------------------------------------------
 
     if btn(⬅️) then
-
         player.dx-=0.35
-
     end
-
 
     if btn(➡️) then
-
         player.dx+=0.35
-
     end
 
-
     player.dx*=0.82
-
 
     player.dx=mid(
         -3,
@@ -816,27 +574,19 @@ function update_player()
         3
     )
 
-
     player.x+=player.dx
-
 
     ------------------------------------------------
     -- SCREEN WRAP
     ------------------------------------------------
 
     if player.x < -player.w then
-
         player.x=128
-
     end
-
 
     if player.x > 128 then
-
         player.x=-player.w
-
     end
-
 
     ------------------------------------------------
     -- OLD POSITION
@@ -844,34 +594,24 @@ function update_player()
 
     local old_y=player.y
 
-
     ------------------------------------------------
     -- GRAVITY
     ------------------------------------------------
 
     player.dy+=gravity
-
     player.y+=player.dy
-
 
     ------------------------------------------------
     -- SPRITE
     ------------------------------------------------
 
     if player.dy < -0.5 then
-
         player.sprite=0
-
     elseif player.dy > 0.5 then
-
         player.sprite=4
-
     else
-
         player.sprite=2
-
     end
-
 
     ------------------------------------------------
     -- HITBOX
@@ -880,42 +620,33 @@ function update_player()
     local hx=player.x+2
     local hy=player.y+1
 
-
     ------------------------------------------------
     -- PLATFORM COLLISION
     ------------------------------------------------
 
     if player.dy>0 then
-
         local old_bottom=
             old_y+1+player.hh
-
 
         local new_bottom=
             hy+player.hh
 
-
         for p in all(platforms) do
-
             local hit_x=
                 hx+player.hw>p.x
                 and hx<p.x+p.w
-
 
             local hit_y=
                 old_bottom<=p.y
                 and new_bottom>=p.y
 
-
             if hit_x and hit_y then
-
                 ------------------------------------------------
                 -- FIX
                 ------------------------------------------------
 
                 player.y=
                     p.y-player.hh-2
-
 
                 ------------------------------------------------
                 -- BROKEN
@@ -926,108 +657,79 @@ function update_player()
                 or p.type=="broken3" then
 
                     player.dy=jump
-
                     player.sprite=2
-
                     sfx(4)
-
 
                     jump_particles(
                         player.x,
                         player.y
                     )
 
-
                     broken_particles(
                         p.x,
                         p.y
                     )
-
 
                     del(
                         platforms,
                         p
                     )
 
-
                     remove_platform_item(p)
 
                     break
-
                 end
-
 
                 ------------------------------------------------
                 -- NORMAL
                 ------------------------------------------------
 
                 player.dy=jump
-
                 player.sprite=2
-
                 sfx(0)
-
 
                 jump_particles(
                     player.x,
                     player.y
                 )
 
-
                 break
-
             end
-
         end
-
     end
-
 end
-
 
 --------------------------------------------------
 -- REMOVE ITEM
 --------------------------------------------------
 
 function remove_platform_item(p)
-
     for item in all(items) do
-
         if item.platform==p then
-
             del(
                 items,
                 item
             )
-
         end
-
     end
-
 end
-
 
 --------------------------------------------------
 -- ITEMS
 --------------------------------------------------
 
 function update_items()
-
     for item in all(items) do
-
         local hx=player.x+2
         local hy=player.y+1
-
 
         local hit_x=
             hx+player.hw>item.x
             and hx<item.x+item.w
 
-
         local hit_y=
             hy+player.hh>item.y
             and hy<item.y+item.h
-
 
         ------------------------------------------------
         -- SPIKES
@@ -1037,39 +739,26 @@ function update_items()
         or item.type=="spike2" then
 
             if player.dy>0 then
-
                 local old_bottom=
                     player.y-player.dy+1+player.hh
 
-
                 local spike_top=item.y
-
 
                 local new_bottom=
                     hy+player.hh
-
 
                 local crossed_top=
                     old_bottom<=spike_top
                     and new_bottom>=spike_top
 
-
                 if hit_x and crossed_top then
-
                     game_over=true
-
                     mode="gameover"
-
                     player.sprite=6
-
                     sfx(1)
-
                     return
-
                 end
-
             end
-
 
         ------------------------------------------------
         -- COIN / BOOST
@@ -1078,80 +767,57 @@ function update_items()
         elseif hit_x and hit_y then
 
             if item.type=="coin" then
-
                 coin_score+=10
-
                 sfx(3)
-
             end
 
-
             if item.type=="boost" then
-
                 player.dy=boost_jump
-
                 player.sprite=0
-
                 sfx(2)
-
 
                 boost_particles(
                     player.x,
                     player.y
                 )
 
-
                 jump_particles(
                     player.x,
                     player.y
                 )
-
             end
-
 
             del(
                 items,
                 item
             )
-
         end
-
     end
-
 end
-
 
 --------------------------------------------------
 -- CAMERA
 --------------------------------------------------
 
 function update_camera()
-
     local target=
         player.y-45
 
-
     if target<camera_y then
-
         camera_y=target
-
     end
-
 end
-
 
 --------------------------------------------------
 -- PLATFORM UPDATE
 --------------------------------------------------
 
 function update_platforms()
-
     ------------------------------------------------
     -- REMOVE OLD
     ------------------------------------------------
 
     for p in all(platforms) do
-
         if p.type!="ground"
         and p.y-camera_y>140 then
 
@@ -1161,11 +827,8 @@ function update_platforms()
                 platforms,
                 p
             )
-
         end
-
     end
-
 
     ------------------------------------------------
     -- HIGHEST
@@ -1173,55 +836,34 @@ function update_platforms()
 
     local highest=9999
 
-
     for p in all(platforms) do
-
         if p.y<highest then
-
             highest=p.y
-
         end
-
     end
-
 
     ------------------------------------------------
     -- GENERATE
     ------------------------------------------------
 
     while highest>camera_y-40 do
-
         highest-=20
 
-
         local pw=16
-
         local px=flr(rnd(113))
-
         local type="normal"
 
-
         if rnd(1)<0.25 then
-
             local r=flr(rnd(3))
 
-
             if r==0 then
-
                 type="broken1"
-
             elseif r==1 then
-
                 type="broken2"
-
             else
-
                 type="broken3"
-
             end
-
         end
-
 
         add_platform(
             px,
@@ -1229,18 +871,14 @@ function update_platforms()
             pw,
             type
         )
-
     end
-
 end
-
 
 --------------------------------------------------
 -- DRAW PLAYER
 --------------------------------------------------
 
 function draw_player()
-
     spr(
         player.sprite,
         player.x,
@@ -1248,18 +886,14 @@ function draw_player()
         2,
         2
     )
-
 end
-
 
 --------------------------------------------------
 -- DRAW PLATFORM
 --------------------------------------------------
 
 function draw_platform(p)
-
     if p.type=="normal" then
-
         spr(
             96,
             p.x,
@@ -1267,10 +901,7 @@ function draw_platform(p)
             2,
             2
         )
-
-
     elseif p.type=="broken1" then
-
         spr(
             98,
             p.x,
@@ -1278,10 +909,7 @@ function draw_platform(p)
             2,
             2
         )
-
-
     elseif p.type=="broken2" then
-
         spr(
             100,
             p.x,
@@ -1289,10 +917,7 @@ function draw_platform(p)
             2,
             2
         )
-
-
     elseif p.type=="broken3" then
-
         spr(
             102,
             p.x,
@@ -1300,20 +925,15 @@ function draw_platform(p)
             2,
             2
         )
-
     end
-
 end
-
 
 --------------------------------------------------
 -- DRAW GROUND
 --------------------------------------------------
 
 function draw_ground()
-
     for x=0,120,8 do
-
         local tile=64+(flr(x/8)%3)
 
         spr(
@@ -1323,7 +943,6 @@ function draw_ground()
             1,
             1
         )
-
     end
 
     rectfill(
@@ -1333,20 +952,15 @@ function draw_ground()
         135,
         4
     )
-
 end
-
 
 --------------------------------------------------
 -- DRAW ITEMS
 --------------------------------------------------
 
 function draw_items()
-
     for item in all(items) do
-
         if item.type=="spike1" then
-
             spr(
                 128,
                 item.x,
@@ -1354,10 +968,7 @@ function draw_items()
                 1,
                 1
             )
-
-
         elseif item.type=="spike2" then
-
             spr(
                 129,
                 item.x,
@@ -1365,10 +976,7 @@ function draw_items()
                 1,
                 1
             )
-
-
         elseif item.type=="coin" then
-
             spr(
                 130,
                 item.x,
@@ -1376,10 +984,7 @@ function draw_items()
                 1,
                 1
             )
-
-
         elseif item.type=="boost" then
-
             spr(
                 131,
                 item.x,
@@ -1387,20 +992,15 @@ function draw_items()
                 1,
                 1
             )
-
         end
-
     end
-
 end
-
 
 --------------------------------------------------
 -- MENU PLATFORMS
 --------------------------------------------------
 
 function setup_menu()
-
     platforms={}
     items={}
     camera_y=0
@@ -1450,13 +1050,10 @@ function setup_menu()
     )
 
     player.x=56
-    player.y=95
-
+    player.y=140
     player.dx=0
     player.dy=normal_jump
-
 end
-
 
 --------------------------------------------------
 -- MENU
@@ -1466,9 +1063,9 @@ function draw_menu()
     -- TITLE SCREEN
     sspr(
         0, 96,    -- Quelle X Y
-        128, 128, -- Quelle Breite Hれへhe
+        128, 128, -- Quelle Breite Hoehe
         1, 8,     -- Ziel X Y
-        128, 128  -- Ziel Breite Hれへhe
+        128, 128  -- Ziel Breite Hoehe
     )
 
     -- GAME VERSION
@@ -1493,25 +1090,20 @@ function draw_menu()
         1
     )
 
-
     print(
         "⬅️ ➡️ TO MOVE",
         36,
         38,
         1
     )
-
 end
-
 
 --------------------------------------------------
 -- DRAW
 --------------------------------------------------
 
 function _draw()
-
     cls(12)
-
 
     ------------------------------------------------
     -- WORLD CAMERA
@@ -1522,43 +1114,31 @@ function _draw()
         camera_y
     )
 
-
     ------------------------------------------------
     -- CLOUDS
     ------------------------------------------------
 
     draw_clouds()
 
-
     ------------------------------------------------
     -- PLATFORMS
     ------------------------------------------------
 
     for p in all(platforms) do
-
         if p.type=="ground" then
-
             draw_ground()
-
         else
-
             draw_platform(p)
-
         end
-
     end
-
 
     ------------------------------------------------
     -- ITEMS
     ------------------------------------------------
 
     if mode!="menu" then
-
         draw_items()
-
     end
-
 
     ------------------------------------------------
     -- PARTICLES
@@ -1566,13 +1146,11 @@ function _draw()
 
     draw_particles()
 
-
     ------------------------------------------------
     -- PLAYER
     ------------------------------------------------
 
     draw_player()
-
 
     ------------------------------------------------
     -- RESET CAMERA
@@ -1580,40 +1158,32 @@ function _draw()
 
     camera()
 
-
     ------------------------------------------------
     -- MENU
     ------------------------------------------------
 
     if mode=="menu" then
-
         draw_menu()
-
     end
-
 
     ------------------------------------------------
     -- SCORE
     ------------------------------------------------
 
     if mode=="game" then
-
         print(
             "score "..score,
             4,
             4,
             1
         )
-
     end
-
 
     ------------------------------------------------
     -- GAME OVER
     ------------------------------------------------
 
     if mode=="gameover" then
-
         rectfill(
             20,
             48,
@@ -1622,14 +1192,12 @@ function _draw()
             0
         )
 
-
         print(
             "game over",
             47,
             55,
             8
         )
-
 
         print(
             "SCORE: "..score,
@@ -1638,16 +1206,13 @@ function _draw()
             7
         )
 
-
         print(
             "PRESS: x TO RESTART",
             27,
             71,
             7
         )
-
     end
-
 end
 __gfx__
 00044400004440000004440000444000000444000044400000044400004440000000000000000000000000000000000000000000000000000000000000000000
@@ -1699,19 +1264,19 @@ b4bb33bb33bbb4bbbbb5bb3300000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 bbbbbbbbbbbbbbbbbbbb00bbb0bbbbbbbbb00bbbbbbb000bbb00bbbbbbbbb0bb0000000000000000000000000000000000000066666666600000000000000000
-b11111111111111bb11111111011111bb11100111111111bb11001111111101b0000066666666000000000006666660000000677777777660000666666000000
-b11111111111111bb11111110111111bb11110111111111bb11101111111101b6666667777777600066666067777760000006677777777760066677777600000
-b11111111111111bb11111110111111bb11110011111111bb11111111111101b6777767777777660677776667777776006666777777777760067777777666666
-b11111111111111bb11111100111111bb11111011111111bb1111111111100106777777777777760677777667777776067777777777777760067777777677776
+b11111111111111bb11111111011111bb11100111111111bb11001111111101b0000066666666000000000000666660000000677777777660000666666000000
+b11111111111111bb11111110111111bb11110111111111bb11101111111101b0666667777777600066666006677760000006677777777760066677777600000
+b11111111111111bb11111110111111bb11110011111111bb11111111111101b6677767777777660677776606777776006666777777777760067777777666660
+b11111111111111bb11111100111111bb11111011111111bb1111111111100106777777777777760677777666777776067777777777777760067777777677766
 bbbbbbbbbbbbbbbbbbbbbbb0bbbbb00bb00bbb00bbbbbbbbbbbb00bbbbbb0bb06677777777777760677777767777776067777777777777660067777777777776
 00000000000000000000000000000000000000000000000000000000000000000667777777777760677777777777776067777777777776600067777777777776
 00000000000000000000000000000000000000000000000000000000000000000066777777777660677777777777776067777777777766600066777777777776
 00000000000000000000000000000000000000000000000000000000000000000666777777777766677777777776666066777777777777600006777777777776
 00000000000000000000000000000000000000000000000000000000000000006677777777777776666777777776600066777777777777600066777777777766
-00000000000000000000000000000000000000000000000000000000000000006777777777777776006677777777660066667777777777600667777777777660
-00000000000000000000000000000000000000000000000000000000000000006677777777777776006677777777760067777777667776600677777777766600
-00000000000000000000000000000000000000000000000000000000000000000677777777777776006777777777760067777777666766000067777766776000
-00000000000000000000000000000000000000000000000000000000000000000667777777776666006777777777660067777776606660000066677666777600
+00000000000000000000000000000000000000000000000000000000000000006777777777777776006677777777660066667777777777600667777777777676
+00000000000000000000000000000000000000000000000000000000000000006677777777777776006677777777760067777777667776600677777777777776
+00000000000000000000000000000000000000000000000000000000000000000677777777777776006777777777760067777777666766000067777766777776
+00000000000000000000000000000000000000000000000000000000000000000667777777776666006777777777660067777776606660000066677666777760
 00000000000000000000000000000000000000000000000000000000000000000066666777766000006677777776600067777666600000000000666600667600
 00000000000000000000000000000000000000000000000000000000000000000000006666660000000666666666000006666666000000000000000000066600
 00000000000000000000000000000000000440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
