@@ -8,6 +8,7 @@ __lua__
 -- 000 = going up
 -- 002 = apex / standing
 -- 004 = going down
+-- 006 = game over
 
 -- platforms
 -- 096 = normal
@@ -24,6 +25,12 @@ __lua__
 -- 130 = coin
 -- 131 = jump boost
 
+-- clouds
+-- 104 = cloud 1
+-- 106 = cloud 2
+-- 108 = cloud 3
+-- 110 = cloud 4
+
 -- sounds
 -- 00 = jump
 -- 01 = game over
@@ -31,73 +38,60 @@ __lua__
 -- 03 = coin
 -- 04 = platform broken
 
-
 function _init()
-
     mode="menu"
-
     setup_game()
-
 end
-
 
 --------------------------------------------------
 -- SETUP GAME
 --------------------------------------------------
 
 function setup_game()
-
     player={
         x=56,
         y=100,
-
         w=16,
         h=16,
-
         hw=12,
         hh=14,
-
         dx=0,
         dy=0,
         sprite=2
     }
 
-
     gravity=0.25
-
     normal_jump=-5.5
     boost_jump=-8.5
-
     jump=normal_jump
-
     camera_y=0
-
     height_score=0
     coin_score=0
     score=0
-
     game_over=false
-
     platforms={}
     particles={}
     items={}
+    clouds={}
 
+    ------------------------------------------------
+    -- CLOUDS
+    ------------------------------------------------
+
+    setup_clouds()
 
     ------------------------------------------------
     -- GAME START GROUND
     ------------------------------------------------
 
     if mode=="game" then
-
         add_platform(
             0,
             120,
             128,
             "ground"
         )
-
     end
-
 
     ------------------------------------------------
     -- GAME PLATFORMS
@@ -105,36 +99,22 @@ function setup_game()
 
     local y=95
 
-
     for i=1,20 do
-
         local pw=16
         local px=flr(rnd(113))
-
         local type="normal"
 
-
         if rnd(1)<0.25 then
-
             local r=flr(rnd(3))
 
-
             if r==0 then
-
                 type="broken1"
-
             elseif r==1 then
-
                 type="broken2"
-
             else
-
                 type="broken3"
-
             end
-
         end
-
 
         add_platform(
             px,
@@ -143,31 +123,884 @@ function setup_game()
             type
         )
 
-
         y-=20
-
     end
-
 
     ------------------------------------------------
     -- MENU SETUP
     ------------------------------------------------
 
     if mode=="menu" then
-
         setup_menu()
-
     end
-
 end
 
+--------------------------------------------------
+-- CLOUD SETUP
+--------------------------------------------------
+
+function setup_clouds()
+    clouds={}
+
+    local cloud_sprites={
+        104,
+        106,
+        108,
+        110
+    }
+
+    for i=1,12 do
+        add(
+            clouds,
+            {
+                x=flr(rnd(128)),
+                -- position relative to camera
+                offset_y=flr(rnd(220))-60,
+                sprite=cloud_sprites[
+                    flr(rnd(4))+1
+                ],
+                -- horizontal speed
+                dx=0.15+rnd(0.35)
+            }
+        )
+    end
+end
+
+--------------------------------------------------
+-- UPDATE CLOUDS
+--------------------------------------------------
+
+function update_clouds()
+    for cloud in all(clouds) do
+        ------------------------------------------------
+        -- HORIZONTAL MOVEMENT
+        ------------------------------------------------
+
+        cloud.x+=cloud.dx
+
+        if cloud.x>128 then
+            cloud.x=-32
+        end
+
+        ------------------------------------------------
+        -- KEEP CLOUDS AROUND CAMERA
+        ------------------------------------------------
+
+        if cloud.offset_y>180 then
+            cloud.offset_y=
+                -60+rnd(40)
+        end
+
+        if cloud.offset_y<-80 then
+            cloud.offset_y=
+                140+rnd(60)
+        end
+    end
+end
+
+--------------------------------------------------
+-- DRAW CLOUDS
+--------------------------------------------------
+
+function draw_clouds()
+    for cloud in all(clouds) do
+        spr(
+            cloud.sprite,
+            cloud.x,
+            camera_y+cloud.offset_y,
+            2,
+            2
+        )
+    end
+end
+
+--------------------------------------------------
+-- START GAME
+--------------------------------------------------
+
+function start_game()
+    mode="game"
+    setup_game()
+end
+
+--------------------------------------------------
+-- PLATFORM
+--------------------------------------------------
+
+function add_platform(x,y,w,type)
+    local p={
+        x=x,
+        y=y,
+        w=w,
+        h=16,
+        type=type
+    }
+
+    add(
+        platforms,
+        p
+    )
+
+    ------------------------------------------------
+    -- NO ITEMS IN MENU
+    ------------------------------------------------
+
+    if mode=="menu" then
+        return
+    end
+
+    ------------------------------------------------
+    -- GROUND
+    ------------------------------------------------
+
+    if type=="ground" then
+        return
+    end
+
+    ------------------------------------------------
+    -- ITEM CHANCE
+    ------------------------------------------------
+
+    if rnd(1)<0.30 then
+        spawn_item(p)
+    end
+end
+
+--------------------------------------------------
+-- ITEM
+--------------------------------------------------
+
+function spawn_item(p)
+    local r=rnd(1)
+    local type
+
+    if r<0.15 then
+        type="spike1"
+    elseif r<0.30 then
+        type="spike2"
+    elseif r<0.65 then
+        type="coin"
+    else
+        type="boost"
+    end
+
+    ------------------------------------------------
+    -- ITEM 8x8
+    ------------------------------------------------
+
+    local ix=
+        p.x+flr(rnd(9))
+
+    add(items,{
+        x=ix,
+        y=p.y-8,
+        w=8,
+        h=8,
+        type=type,
+        platform=p
+    })
+end
+
+--------------------------------------------------
+-- PARTICLES
+--------------------------------------------------
+
+function add_particle(
+    x,
+    y,
+    dx,
+    dy,
+    col,
+    life
+)
+    add(particles,{
+        x=x,
+        y=y,
+        dx=dx,
+        dy=dy,
+        col=col,
+        life=life,
+        maxlife=life
+    })
+end
+
+function jump_particles(x,y)
+    for i=1,7 do
+        local side=1
+
+        if i%2==0 then
+            side=-1
+        end
+
+        add_particle(
+            x+8+side*flr(rnd(4)),
+            y+15,
+            side*(0.3+rnd(0.8)),
+            -0.3-rnd(0.8),
+            7,
+            10+flr(rnd(8))
+        )
+    end
+end
+
+function boost_particles(x,y)
+    for i=1,60 do
+        local a=rnd(1)*6.28
+        local spd=0.5+rnd(2)
+
+        add_particle(
+            x+8,
+            y+8,
+            cos(a)*spd,
+            sin(a)*spd-1,
+            10,
+            15+flr(rnd(15))
+        )
+    end
+end
+
+function broken_particles(x,y)
+    for i=1,60 do
+        add_particle(
+            x+8+rnd(16)-8,
+            y+8+rnd(12)-6,
+            rnd(2)-1,
+            -1-rnd(2),
+            11,
+            12+flr(rnd(10))
+        )
+    end
+end
+
+--------------------------------------------------
+-- PARTICLES UPDATE
+--------------------------------------------------
+
+function update_particles()
+    for p in all(particles) do
+        p.x+=p.dx
+        p.y+=p.dy
+        p.dy+=0.12
+        p.life-=1
+
+        if p.life<=0 then
+            del(
+                particles,
+                p
+            )
+        end
+    end
+end
+
+function draw_particles()
+    for p in all(particles) do
+        if p.life>p.maxlife*0.5 then
+            pset(
+                p.x,
+                p.y,
+                p.col
+            )
+        elseif p.life%2==0 then
+            pset(
+                p.x,
+                p.y,
+                p.col
+            )
+        end
+    end
+end
+
+--------------------------------------------------
+-- UPDATE
+--------------------------------------------------
+
+function _update()
+    ------------------------------------------------
+    -- CLOUDS
+    ------------------------------------------------
+
+    update_clouds()
+
+    ------------------------------------------------
+    -- MENU
+    ------------------------------------------------
+
+    if mode=="menu" then
+        update_menu()
+        update_particles()
+        return
+    end
+
+    ------------------------------------------------
+    -- GAME OVER
+    ------------------------------------------------
+
+    if mode=="gameover" then
+        update_particles()
+
+        if btnp(❎) then
+            mode="menu"
+            setup_game()
+        end
+
+        return
+    end
+
+    ------------------------------------------------
+    -- GAME
+    ------------------------------------------------
+
+    update_player()
+    update_camera()
+    update_platforms()
+    update_items()
+    update_particles()
+
+    ------------------------------------------------
+    -- FALL OUT OF SCREEN
+    ------------------------------------------------
+
+    if player.y-camera_y>128-16 then
+        game_over=true
+        mode="gameover"
+        player.sprite=6
+        sfx(1)
+        return
+    end
+
+    ------------------------------------------------
+    -- HEIGHT SCORE
+    ------------------------------------------------
+
+    height_score=max(
+        height_score,
+        flr(-camera_y/10)
+    )
+
+    score=
+        height_score+
+        coin_score
+end
+
+--------------------------------------------------
+-- MENU UPDATE
+--------------------------------------------------
+
+function update_menu()
+    ------------------------------------------------
+    -- HORIZONTAL MOVEMENT
+    ------------------------------------------------
+
+    player.dx*=0.82
+    player.x+=player.dx
+
+    ------------------------------------------------
+    -- SCREEN WRAP
+    ------------------------------------------------
+
+    if player.x < -player.w then
+        player.x=128
+    end
+
+    if player.x > 128 then
+        player.x=-player.w
+    end
+
+    ------------------------------------------------
+    -- GRAVITY
+    ------------------------------------------------
+
+    player.dy+=gravity
+    player.y+=player.dy
+
+    ------------------------------------------------
+    -- SPRITE
+    ------------------------------------------------
+
+    if player.dy < -0.5 then
+        player.sprite=0
+    elseif player.dy > 0.5 then
+        player.sprite=4
+    else
+        player.sprite=2
+    end
+
+    ------------------------------------------------
+    -- NO PLATFORM COLLISION
+    ------------------------------------------------
+
+    if player.y>104 then
+        player.y=104
+        player.dy=normal_jump
+        player.sprite=2
+
+        jump_particles(
+            player.x,
+            player.y
+        )
+    end
+
+    ------------------------------------------------
+    -- START
+    ------------------------------------------------
+
+    if btnp(❎) then
+        start_game()
+    end
+end
+
+--------------------------------------------------
+-- PLAYER
+--------------------------------------------------
+
+function update_player()
+    ------------------------------------------------
+    -- MOVEMENT
+    ------------------------------------------------
+
+    if btn(⬅️) then
+        player.dx-=0.35
+    end
+
+    if btn(➡️) then
+        player.dx+=0.35
+    end
+
+    player.dx*=0.82
+
+    player.dx=mid(
+        -3,
+        player.dx,
+        3
+    )
+
+    player.x+=player.dx
+
+    ------------------------------------------------
+    -- SCREEN WRAP
+    ------------------------------------------------
+
+    if player.x < -player.w then
+        player.x=128
+    end
+
+    if player.x > 128 then
+        player.x=-player.w
+    end
+
+    ------------------------------------------------
+    -- OLD POSITION
+    ------------------------------------------------
+
+    local old_y=player.y
+
+    ------------------------------------------------
+    -- GRAVITY
+    ------------------------------------------------
+
+    player.dy+=gravity
+    player.y+=player.dy
+
+    ------------------------------------------------
+    -- SPRITE
+    ------------------------------------------------
+
+    if player.dy < -0.5 then
+        player.sprite=0
+    elseif player.dy > 0.5 then
+        player.sprite=4
+    else
+        player.sprite=2
+    end
+
+    ------------------------------------------------
+    -- HITBOX
+    ------------------------------------------------
+
+    local hx=player.x+2
+    local hy=player.y+1
+
+    ------------------------------------------------
+    -- PLATFORM COLLISION
+    ------------------------------------------------
+
+    if player.dy>0 then
+        local old_bottom=
+            old_y+1+player.hh
+
+        local new_bottom=
+            hy+player.hh
+
+        for p in all(platforms) do
+            local hit_x=
+                hx+player.hw>p.x
+                and hx<p.x+p.w
+
+            local hit_y=
+                old_bottom<=p.y
+                and new_bottom>=p.y
+
+            if hit_x and hit_y then
+                ------------------------------------------------
+                -- FIX
+                ------------------------------------------------
+
+                player.y=
+                    p.y-player.hh-2
+
+                ------------------------------------------------
+                -- BROKEN
+                ------------------------------------------------
+
+                if p.type=="broken1"
+                or p.type=="broken2"
+                or p.type=="broken3" then
+
+                    player.dy=jump
+                    player.sprite=2
+                    sfx(4)
+
+                    jump_particles(
+                        player.x,
+                        player.y
+                    )
+
+                    broken_particles(
+                        p.x,
+                        p.y
+                    )
+
+                    del(
+                        platforms,
+                        p
+                    )
+
+                    remove_platform_item(p)
+
+                    break
+                end
+
+                ------------------------------------------------
+                -- NORMAL
+                ------------------------------------------------
+
+                player.dy=jump
+                player.sprite=2
+                sfx(0)
+
+                jump_particles(
+                    player.x,
+                    player.y
+                )
+
+                break
+            end
+        end
+    end
+end
+
+--------------------------------------------------
+-- REMOVE ITEM
+--------------------------------------------------
+
+function remove_platform_item(p)
+    for item in all(items) do
+        if item.platform==p then
+            del(
+                items,
+                item
+            )
+        end
+    end
+end
+
+--------------------------------------------------
+-- ITEMS
+--------------------------------------------------
+
+function update_items()
+    for item in all(items) do
+        local hx=player.x+2
+        local hy=player.y+1
+
+        local hit_x=
+            hx+player.hw>item.x
+            and hx<item.x+item.w
+
+        local hit_y=
+            hy+player.hh>item.y
+            and hy<item.y+item.h
+
+        ------------------------------------------------
+        -- SPIKES
+        ------------------------------------------------
+
+        if item.type=="spike1"
+        or item.type=="spike2" then
+
+            if player.dy>0 then
+                local old_bottom=
+                    player.y-player.dy+1+player.hh
+
+                local spike_top=item.y
+
+                local new_bottom=
+                    hy+player.hh
+
+                local crossed_top=
+                    old_bottom<=spike_top
+                    and new_bottom>=spike_top
+
+                if hit_x and crossed_top then
+                    game_over=true
+                    mode="gameover"
+                    player.sprite=6
+                    sfx(1)
+                    return
+                end
+            end
+
+        ------------------------------------------------
+        -- COIN / BOOST
+        ------------------------------------------------
+
+        elseif hit_x and hit_y then
+
+            if item.type=="coin" then
+                coin_score+=10
+                sfx(3)
+            end
+
+            if item.type=="boost" then
+                player.dy=boost_jump
+                player.sprite=0
+                sfx(2)
+
+                boost_particles(
+                    player.x,
+                    player.y
+                )
+
+                jump_particles(
+                    player.x,
+                    player.y
+                )
+            end
+
+            del(
+                items,
+                item
+            )
+        end
+    end
+end
+
+--------------------------------------------------
+-- CAMERA
+--------------------------------------------------
+
+function update_camera()
+    local target=
+        player.y-45
+
+    if target<camera_y then
+        camera_y=target
+    end
+end
+
+--------------------------------------------------
+-- PLATFORM UPDATE
+--------------------------------------------------
+
+function update_platforms()
+    ------------------------------------------------
+    -- REMOVE OLD
+    ------------------------------------------------
+
+    for p in all(platforms) do
+        if p.type!="ground"
+        and p.y-camera_y>140 then
+
+            remove_platform_item(p)
+
+            del(
+                platforms,
+                p
+            )
+        end
+    end
+
+    ------------------------------------------------
+    -- HIGHEST
+    ------------------------------------------------
+
+    local highest=9999
+
+    for p in all(platforms) do
+        if p.y<highest then
+            highest=p.y
+        end
+    end
+
+    ------------------------------------------------
+    -- GENERATE
+    ------------------------------------------------
+
+    while highest>camera_y-40 do
+        highest-=20
+
+        local pw=16
+        local px=flr(rnd(113))
+        local type="normal"
+
+        if rnd(1)<0.25 then
+            local r=flr(rnd(3))
+
+            if r==0 then
+                type="broken1"
+            elseif r==1 then
+                type="broken2"
+            else
+                type="broken3"
+            end
+        end
+
+        add_platform(
+            px,
+            highest,
+            pw,
+            type
+        )
+    end
+end
+
+--------------------------------------------------
+-- DRAW PLAYER
+--------------------------------------------------
+
+function draw_player()
+    spr(
+        player.sprite,
+        player.x,
+        player.y,
+        2,
+        2
+    )
+end
+
+--------------------------------------------------
+-- DRAW PLATFORM
+--------------------------------------------------
+
+function draw_platform(p)
+    if p.type=="normal" then
+        spr(
+            96,
+            p.x,
+            p.y,
+            2,
+            2
+        )
+    elseif p.type=="broken1" then
+        spr(
+            98,
+            p.x,
+            p.y,
+            2,
+            2
+        )
+    elseif p.type=="broken2" then
+        spr(
+            100,
+            p.x,
+            p.y,
+            2,
+            2
+        )
+    elseif p.type=="broken3" then
+        spr(
+            102,
+            p.x,
+            p.y,
+            2,
+            2
+        )
+    end
+end
+
+--------------------------------------------------
+-- DRAW GROUND
+--------------------------------------------------
+
+function draw_ground()
+    for x=0,120,8 do
+        local tile=64+(flr(x/8)%3)
+
+        spr(
+            tile,
+            x,
+            120,
+            1,
+            1
+        )
+    end
+
+    rectfill(
+        0,
+        128,
+        127,
+        135,
+        4
+    )
+end
+
+--------------------------------------------------
+-- DRAW ITEMS
+--------------------------------------------------
+
+function draw_items()
+    for item in all(items) do
+        if item.type=="spike1" then
+            spr(
+                128,
+                item.x,
+                item.y,
+                1,
+                1
+            )
+        elseif item.type=="spike2" then
+            spr(
+                129,
+                item.x,
+                item.y,
+                1,
+                1
+            )
+        elseif item.type=="coin" then
+            spr(
+                130,
+                item.x,
+                item.y,
+                1,
+                1
+            )
+        elseif item.type=="boost" then
+            spr(
+                131,
+                item.x,
+                item.y,
+                1,
+                1
+            )
+        end
+    end
+end
 
 --------------------------------------------------
 -- MENU PLATFORMS
 --------------------------------------------------
 
 function setup_menu()
-
     platforms={}
     items={}
     camera_y=0
@@ -210,1157 +1043,70 @@ function setup_menu()
     )
 
     add_platform(
-        62,
-        48,
+        22,
+        55,
         16,
-        "broken2"
-    )
-
-    add_platform(
-        20,
-        30,
-        16,
-        "normal"
+        "broken3"
     )
 
     player.x=56
-    player.y=95
-
+    player.y=140
     player.dx=0
     player.dy=normal_jump
-
 end
-
-
---------------------------------------------------
--- START GAME
---------------------------------------------------
-
-function start_game()
-
-    mode="game"
-
-    setup_game()
-
-end
-
-
---------------------------------------------------
--- PLATFORM
---------------------------------------------------
-
-function add_platform(x,y,w,type)
-
-    local p={
-
-        x=x,
-        y=y,
-
-        w=w,
-        h=16,
-
-        type=type
-
-    }
-
-
-    add(
-        platforms,
-        p
-    )
-
-
-    ------------------------------------------------
-    -- NO ITEMS IN MENU
-    ------------------------------------------------
-
-    if mode=="menu" then
-
-        return
-
-    end
-
-
-    ------------------------------------------------
-    -- GROUND
-    ------------------------------------------------
-
-    if type=="ground" then
-
-        return
-
-    end
-
-
-    ------------------------------------------------
-    -- ITEM CHANCE
-    ------------------------------------------------
-
-    if rnd(1)<0.30 then
-
-        spawn_item(p)
-
-    end
-
-end
-
-
---------------------------------------------------
--- ITEM
---------------------------------------------------
-
-function spawn_item(p)
-
-    local r=rnd(1)
-
-    local type
-
-
-    if r<0.15 then
-
-        type="spike1"
-
-    elseif r<0.30 then
-
-        type="spike2"
-
-    elseif r<0.65 then
-
-        type="coin"
-
-    else
-
-        type="boost"
-
-    end
-
-
-    ------------------------------------------------
-    -- ITEM 8x8
-    ------------------------------------------------
-
-    local ix=
-        p.x+flr(rnd(9))
-
-
-    add(items,{
-
-        x=ix,
-        y=p.y-8,
-
-        w=8,
-        h=8,
-
-        type=type,
-
-        platform=p
-
-    })
-
-end
-
-
---------------------------------------------------
--- PARTICLES
---------------------------------------------------
-
-function add_particle(
-    x,
-    y,
-    dx,
-    dy,
-    col,
-    life
-)
-
-    add(particles,{
-
-        x=x,
-        y=y,
-
-        dx=dx,
-        dy=dy,
-
-        col=col,
-
-        life=life,
-        maxlife=life
-
-    })
-
-end
-
-
-function jump_particles(x,y)
-
-    for i=1,7 do
-
-        local side=1
-
-
-        if i%2==0 then
-
-            side=-1
-
-        end
-
-
-        add_particle(
-
-            x+8+side*flr(rnd(4)),
-            y+15,
-
-            side*(0.3+rnd(0.8)),
-            -0.3-rnd(0.8),
-
-            7,
-
-            10+flr(rnd(8))
-
-        )
-
-    end
-
-end
-
-
-function broken_particles(x,y)
-
-    for i=1,14 do
-
-        add_particle(
-
-            x+8+rnd(16)-8,
-            y+8+rnd(12)-6,
-
-            rnd(2)-1,
-            -1-rnd(2),
-
-            11,
-
-            12+flr(rnd(10))
-
-        )
-
-    end
-
-end
-
-
---------------------------------------------------
--- PARTICLES UPDATE
---------------------------------------------------
-
-function update_particles()
-
-    for p in all(particles) do
-
-        p.x+=p.dx
-        p.y+=p.dy
-
-        p.dy+=0.12
-
-        p.life-=1
-
-
-        if p.life<=0 then
-
-            del(
-                particles,
-                p
-            )
-
-        end
-
-    end
-
-end
-
-
-function draw_particles()
-
-    for p in all(particles) do
-
-        if p.life>p.maxlife*0.5 then
-
-            pset(
-                p.x,
-                p.y,
-                p.col
-            )
-
-        elseif p.life%2==0 then
-
-            pset(
-                p.x,
-                p.y,
-                p.col
-            )
-
-        end
-
-    end
-
-end
-
-
---------------------------------------------------
--- UPDATE
---------------------------------------------------
-
-function _update()
-
-    ------------------------------------------------
-    -- MENU
-    ------------------------------------------------
-
-    if mode=="menu" then
-
-        update_menu()
-
-        update_particles()
-
-        return
-
-    end
-
-
-    ------------------------------------------------
-    -- GAME OVER
-    ------------------------------------------------
-
-    if mode=="gameover" then
-
-        update_particles()
-
-
-        if btnp(❎) then
-
-            mode="menu"
-
-            setup_game()
-
-        end
-
-
-        return
-
-    end
-
-
-    ------------------------------------------------
-    -- GAME
-    ------------------------------------------------
-
-    update_player()
-
-    update_camera()
-
-    update_platforms()
-
-    update_items()
-
-    update_particles()
-
-
-    ------------------------------------------------
-    -- FALL OUT OF SCREEN
-    ------------------------------------------------
-
-    if player.y-camera_y>128 then
-
-        game_over=true
-
-        mode="gameover"
-
-        sfx(1)
-
-        return
-
-    end
-
-
-    ------------------------------------------------
-    -- HEIGHT SCORE
-    ------------------------------------------------
-
-    height_score=max(
-        height_score,
-        flr(-camera_y/10)
-    )
-
-
-    score=
-        height_score+
-        coin_score
-
-end
-
-
---------------------------------------------------
--- MENU UPDATE
---------------------------------------------------
-
-function update_menu()
-
-    ------------------------------------------------
-    -- HORIZONTAL MOVEMENT
-    ------------------------------------------------
-
-    player.dx*=0.82
-
-    player.x+=player.dx
-
-
-    ------------------------------------------------
-    -- SCREEN WRAP
-    ------------------------------------------------
-
-    if player.x < -player.w then
-
-        player.x=128
-
-    end
-
-
-    if player.x > 128 then
-
-        player.x=-player.w
-
-    end
-
-
-    ------------------------------------------------
-    -- GRAVITY
-    ------------------------------------------------
-
-    player.dy+=gravity
-
-    player.y+=player.dy
-
-
-    ------------------------------------------------
-    -- SPRITE
-    ------------------------------------------------
-
-    if player.dy < -0.5 then
-
-        player.sprite=0
-
-    elseif player.dy > 0.5 then
-
-        player.sprite=4
-
-    else
-
-        player.sprite=2
-
-    end
-
-
-    ------------------------------------------------
-    -- NO PLATFORM COLLISION
-    ------------------------------------------------
-
-    if player.y>104 then
-
-        player.y=104
-
-        player.dy=normal_jump
-
-        player.sprite=2
-
-
-        jump_particles(
-            player.x,
-            player.y
-        )
-
-    end
-
-
-    ------------------------------------------------
-    -- START
-    ------------------------------------------------
-
-    if btnp(❎) then
-
-        start_game()
-
-    end
-
-end
-
-
---------------------------------------------------
--- PLAYER
---------------------------------------------------
-
-function update_player()
-
-    ------------------------------------------------
-    -- MOVEMENT
-    ------------------------------------------------
-
-    if btn(⬅️) then
-
-        player.dx-=0.35
-
-    end
-
-
-    if btn(➡️) then
-
-        player.dx+=0.35
-
-    end
-
-
-    player.dx*=0.82
-
-
-    player.dx=mid(
-        -3,
-        player.dx,
-        3
-    )
-
-
-    player.x+=player.dx
-
-
-    ------------------------------------------------
-    -- SCREEN WRAP
-    ------------------------------------------------
-
-    if player.x < -player.w then
-
-        player.x=128
-
-    end
-
-
-    if player.x > 128 then
-
-        player.x=-player.w
-
-    end
-
-
-    ------------------------------------------------
-    -- OLD POSITION
-    ------------------------------------------------
-
-    local old_y=player.y
-
-
-    ------------------------------------------------
-    -- GRAVITY
-    ------------------------------------------------
-
-    player.dy+=gravity
-
-    player.y+=player.dy
-
-
-    ------------------------------------------------
-    -- SPRITE
-    ------------------------------------------------
-
-    if player.dy < -0.5 then
-
-        player.sprite=0
-
-    elseif player.dy > 0.5 then
-
-        player.sprite=4
-
-    else
-
-        player.sprite=2
-
-    end
-
-
-    ------------------------------------------------
-    -- HITBOX
-    ------------------------------------------------
-
-    local hx=player.x+2
-    local hy=player.y+1
-
-
-    ------------------------------------------------
-    -- PLATFORM COLLISION
-    ------------------------------------------------
-
-    if player.dy>0 then
-
-        local old_bottom=
-            old_y+1+player.hh
-
-
-        local new_bottom=
-            hy+player.hh
-
-
-        for p in all(platforms) do
-
-            local hit_x=
-                hx+player.hw>p.x
-                and hx<p.x+p.w
-
-
-            local hit_y=
-                old_bottom<=p.y
-                and new_bottom>=p.y
-
-
-            if hit_x and hit_y then
-
-                ------------------------------------------------
-                -- FIX
-                -- player bottom = player.y + 15
-                -- platform top = p.y
-                -- therefore player.y = p.y - 15
-                ------------------------------------------------
-
-                player.y=
-                    p.y-player.hh-2
-
-
-                ------------------------------------------------
-                -- BROKEN
-                ------------------------------------------------
-
-                if p.type=="broken1"
-                or p.type=="broken2"
-                or p.type=="broken3" then
-
-                    player.dy=jump
-
-                    player.sprite=2
-
-                    sfx(4)
-
-
-                    jump_particles(
-                        player.x,
-                        player.y
-                    )
-
-
-                    broken_particles(
-                        p.x,
-                        p.y
-                    )
-
-
-                    del(
-                        platforms,
-                        p
-                    )
-
-
-                    remove_platform_item(p)
-
-                    break
-
-                end
-
-
-                ------------------------------------------------
-                -- NORMAL
-                ------------------------------------------------
-
-                player.dy=jump
-
-                player.sprite=2
-
-                sfx(0)
-
-
-                jump_particles(
-                    player.x,
-                    player.y
-                )
-
-
-                break
-
-            end
-
-        end
-
-    end
-
-end
-
-
---------------------------------------------------
--- REMOVE ITEM
---------------------------------------------------
-
-function remove_platform_item(p)
-
-    for item in all(items) do
-
-        if item.platform==p then
-
-            del(
-                items,
-                item
-            )
-
-        end
-
-    end
-
-end
-
-
---------------------------------------------------
--- ITEMS
---------------------------------------------------
-
-function update_items()
-
-    for item in all(items) do
-
-        local hx=player.x+2
-        local hy=player.y+1
-
-
-        local hit_x=
-            hx+player.hw>item.x
-            and hx<item.x+item.w
-
-
-        local hit_y=
-            hy+player.hh>item.y
-            and hy<item.y+item.h
-
-
-        ------------------------------------------------
-        -- SPIKES
-        ------------------------------------------------
-
-        if item.type=="spike1"
-        or item.type=="spike2" then
-
-            if player.dy>0 then
-
-                local old_bottom=
-                    player.y-player.dy+1+player.hh
-
-
-                local spike_top=item.y
-
-
-                local new_bottom=
-                    hy+player.hh
-
-
-                local crossed_top=
-                    old_bottom<=spike_top
-                    and new_bottom>=spike_top
-
-
-                if hit_x and crossed_top then
-
-                    game_over=true
-
-                    mode="gameover"
-
-                    sfx(1)
-
-                    return
-
-                end
-
-            end
-
-
-        ------------------------------------------------
-        -- COIN / BOOST
-        ------------------------------------------------
-
-        elseif hit_x and hit_y then
-
-            if item.type=="coin" then
-
-                coin_score+=10
-
-                sfx(3)
-
-            end
-
-
-            if item.type=="boost" then
-
-                player.dy=boost_jump
-
-                player.sprite=0
-
-                sfx(2)
-
-
-                jump_particles(
-                    player.x,
-                    player.y
-                )
-
-            end
-
-
-            del(
-                items,
-                item
-            )
-
-        end
-
-    end
-
-end
-
-
---------------------------------------------------
--- CAMERA
---------------------------------------------------
-
-function update_camera()
-
-    local target=
-        player.y-45
-
-
-    if target<camera_y then
-
-        camera_y=target
-
-    end
-
-end
-
-
---------------------------------------------------
--- PLATFORM UPDATE
---------------------------------------------------
-
-function update_platforms()
-
-    ------------------------------------------------
-    -- REMOVE OLD
-    ------------------------------------------------
-
-    for p in all(platforms) do
-
-        if p.type!="ground"
-        and p.y-camera_y>140 then
-
-            remove_platform_item(p)
-
-            del(
-                platforms,
-                p
-            )
-
-        end
-
-    end
-
-
-    ------------------------------------------------
-    -- HIGHEST
-    ------------------------------------------------
-
-    local highest=9999
-
-
-    for p in all(platforms) do
-
-        if p.y<highest then
-
-            highest=p.y
-
-        end
-
-    end
-
-
-    ------------------------------------------------
-    -- GENERATE
-    ------------------------------------------------
-
-    while highest>camera_y-40 do
-
-        highest-=20
-
-
-        local pw=16
-
-        local px=flr(rnd(113))
-
-        local type="normal"
-
-
-        if rnd(1)<0.25 then
-
-            local r=flr(rnd(3))
-
-
-            if r==0 then
-
-                type="broken1"
-
-            elseif r==1 then
-
-                type="broken2"
-
-            else
-
-                type="broken3"
-
-            end
-
-        end
-
-
-        add_platform(
-            px,
-            highest,
-            pw,
-            type
-        )
-
-    end
-
-end
-
-
---------------------------------------------------
--- DRAW PLAYER
---------------------------------------------------
-
-function draw_player()
-
-    spr(
-        player.sprite,
-        player.x,
-        player.y,
-        2,
-        2
-    )
-
-end
-
-
---------------------------------------------------
--- DRAW PLATFORM
---------------------------------------------------
-
-function draw_platform(p)
-
-    if p.type=="normal" then
-
-        spr(
-            96,
-            p.x,
-            p.y,
-            2,
-            2
-        )
-
-
-    elseif p.type=="broken1" then
-
-        spr(
-            98,
-            p.x,
-            p.y,
-            2,
-            2
-        )
-
-
-    elseif p.type=="broken2" then
-
-        spr(
-            100,
-            p.x,
-            p.y,
-            2,
-            2
-        )
-
-
-    elseif p.type=="broken3" then
-
-        spr(
-            102,
-            p.x,
-            p.y,
-            2,
-            2
-        )
-
-    end
-
-end
-
-
---------------------------------------------------
--- DRAW GROUND
---------------------------------------------------
-
-function draw_ground()
-
-    for x=0,120,8 do
-
-        -- fixed grass pattern
-        local tile=64+(flr(x/8)%3)
-
-        spr(
-            tile,
-            x,
-            120,
-            1,
-            1
-        )
-
-    end
-
-    rectfill(
-        0,
-        128,
-        127,
-        135,
-        4
-    )
-
-end
-
-
---------------------------------------------------
--- DRAW ITEMS
---------------------------------------------------
-
-function draw_items()
-
-    for item in all(items) do
-
-        if item.type=="spike1" then
-
-            spr(
-                128,
-                item.x,
-                item.y,
-                1,
-                1
-            )
-
-
-        elseif item.type=="spike2" then
-
-            spr(
-                129,
-                item.x,
-                item.y,
-                1,
-                1
-            )
-
-
-        elseif item.type=="coin" then
-
-            spr(
-                130,
-                item.x,
-                item.y,
-                1,
-                1
-            )
-
-
-        elseif item.type=="boost" then
-
-            spr(
-                131,
-                item.x,
-                item.y,
-                1,
-                1
-            )
-
-        end
-
-    end
-
-end
-
 
 --------------------------------------------------
 -- MENU
 --------------------------------------------------
 
 function draw_menu()
-
-    -- GAME VERSION
-
-    print(
-        "V0.2",
-        1,
-        1,
-        7
+    -- TITLE SCREEN
+    sspr(
+        0, 96,    -- Quelle X Y
+        128, 128, -- Quelle Breite Hoehe
+        1, 8,     -- Ziel X Y
+        128, 128  -- Ziel Breite Hoehe
     )
 
+    -- GAME VERSION
+    print(
+        "V0.3",
+        1,
+        1,
+        1
+    )
 
     print(
         "MADE BY KNUSPII",
         68,
         1,
-        7
+        1
     )
 
-
     print(
-        "crunchy jump",
-        40,
-        15,
-        9
-    )
-
-
-    print(
-        "PRESS X",
-        50,
+        "PRESS x TO START",
         30,
-        6
+        45,
+        1
     )
-
 
     print(
         "⬅️ ➡️ TO MOVE",
         36,
         38,
-        6
+        1
     )
-
 end
-
 
 --------------------------------------------------
 -- DRAW
 --------------------------------------------------
 
 function _draw()
-
     cls(12)
 
-
     ------------------------------------------------
-    -- WORLD
+    -- WORLD CAMERA
     ------------------------------------------------
 
     camera(
@@ -1368,37 +1114,31 @@ function _draw()
         camera_y
     )
 
+    ------------------------------------------------
+    -- CLOUDS
+    ------------------------------------------------
+
+    draw_clouds()
 
     ------------------------------------------------
     -- PLATFORMS
     ------------------------------------------------
 
     for p in all(platforms) do
-
         if p.type=="ground" then
-
             draw_ground()
-
         else
-
             draw_platform(p)
-
         end
-
     end
-
 
     ------------------------------------------------
     -- ITEMS
-    -- visible during game AND gameover
     ------------------------------------------------
 
     if mode!="menu" then
-
         draw_items()
-
     end
-
 
     ------------------------------------------------
     -- PARTICLES
@@ -1406,50 +1146,44 @@ function _draw()
 
     draw_particles()
 
-
     ------------------------------------------------
     -- PLAYER
     ------------------------------------------------
 
     draw_player()
 
+    ------------------------------------------------
+    -- RESET CAMERA
+    ------------------------------------------------
 
     camera()
-
 
     ------------------------------------------------
     -- MENU
     ------------------------------------------------
 
     if mode=="menu" then
-
         draw_menu()
-
     end
-
 
     ------------------------------------------------
     -- SCORE
     ------------------------------------------------
 
     if mode=="game" then
-
         print(
             "score "..score,
             4,
             4,
-            7
+            1
         )
-
     end
-
 
     ------------------------------------------------
     -- GAME OVER
     ------------------------------------------------
 
     if mode=="gameover" then
-
         rectfill(
             20,
             48,
@@ -1458,50 +1192,45 @@ function _draw()
             0
         )
 
-
         print(
             "game over",
-            41,
+            47,
             55,
             8
         )
 
-
         print(
             "SCORE: "..score,
-            42,
+            47,
             63,
             7
         )
 
-
         print(
-            "PRESS: X",
-            42,
+            "PRESS: x TO RESTART",
+            27,
             71,
             7
         )
-
     end
-
 end
 __gfx__
-00044400004440000004440000444000000444000044400000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0049a944449a94000049a944449a94000049a944449a940000000000000000000000000000000000000000000000000000000000000000000000000000000000
-04aaaa9999aaaa4004aaaa9999aaaa4004aaaa9999aaaa4000000000000000000000000000000000000000000000000000000000000000000000000000000000
-04a9a9aaaa9aaa4004a9a9aaaa9aaa4004a9a9aaaa9aaa4000000000000000000000000000000000000000000000000000000000000000000000000000000000
-04aaaaa9aaaaa94004aaaaa9aaaaa94004aaaaa9aaaaa94000000000000000000000000000000000000000000000000000000000000000000000000000000000
-004aaaaaaaaa9400004aaaaaaaaa9400004aaaaaaaaa940000000000000000000000000000000000000000000000000000000000000000000000000000000000
-004aaaaaaaaaa400004aaaaaaaaaa400004aaaaaaaaaa40000000000000000000000000000000000000000000000000000000000000000000000000000000000
-004aa1aaaa1aa400004aa1aaaa1aa400404aa1aaaa1aa40400000000000000000000000000000000000000000000000000000000000000000000000000000000
-044aa1aaaa1aa440444aa1aaaa1aa444044aa1aaaa1aa44000000000000000000000000000000000000000000000000000000000000000000000000000000000
-404aeea11aeea404004aeea11aeea400004aeea11aeea40000000000000000000000000000000000000000000000000000000000000000000000000000000000
-004aaaaaaaaaa400004aaaaaaaaaa400004aaaaaaaaaa40000000000000000000000000000000000000000000000000000000000000000000000000000000000
-004a9aaaaaaaa400004a9aaaaaaaa400004a9aaaaaaaa40000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0049aaaaaaaa94000049aaaaaaaa94000049aaaaaaaa940000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00044444444440000004444444444000000444444444400000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000400004000000000040000400000000004000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00004400004400000000040000400000000044000044000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00044400004440000004440000444000000444000044400000044400004440000000000000000000000000000000000000000000000000000000000000000000
+0049a944449a94000049a944449a94000049a944449a94000049a944449a94000000000000000000000000000000000000000000000000000000000000000000
+04aaaa9999aaaa4004aaaa9999aaaa4004aaaa9999aaaa4004aaaa9999aaaa400000000000000000000000000000000000000000000000000000000000000000
+04a9a9aaaa9aaa4004a9a9aaaa9aaa4004a9a9aaaa9aaa4004a9a9aaaa9aaa400000000000000000000000000000000000000000000000000000000000000000
+04aaaaa9aaaaa94004aaaaa9aaaaa94004aaaaa9aaaaa94004aaaaa9aaaaa9400000000000000000000000000000000000000000000000000000000000000000
+004aaaaaaaaa9400004aaaaaaaaa9400004aaaaaaaaa9400004aaaaaaaaa94000000000000000000000000000000000000000000000000000000000000000000
+004aaaaaaaaaa400004aaaaaaaaaa400004aaaaaaaaaa400004a1a1aa1a1a4000000000000000000000000000000000000000000000000000000000000000000
+004aa1aaaa1aa400004aa1aaaa1aa400404aa1aaaa1aa404004aa1aaaa1aa4000000000000000000000000000000000000000000000000000000000000000000
+044aa1aaaa1aa440444aa1aaaa1aa444044aa1aaaa1aa440044a1a1aa1a1a4400000000000000000000000000000000000000000000000000000000000000000
+404aeea11aeea404004aeea11aeea400004aeea11aeea400404aaaaaaaaaa4040000000000000000000000000000000000000000000000000000000000000000
+004aaaaaaaaaa400004aaaaaaaaaa400004aaaaaaaaaa400004aaaa11aaaa4000000000000000000000000000000000000000000000000000000000000000000
+004a9aaaaaaaa400004a9aaaaaaaa400004a9aaaaaaaa400004a9a1aa1aaa4000000000000000000000000000000000000000000000000000000000000000000
+0049aaaaaaaa94000049aaaaaaaa94000049aaaaaaaa94000049aaaaaaaa94000000000000000000000000000000000000000000000000000000000000000000
+00044444444440000004444444444000000444444444400000044444444440000000000000000000000000000000000000000000000000000000000000000000
+00000400004000000000040000400000000004000040000000000400004000000000000000000000000000000000000000000000000000000000000000000000
+00004400004400000000040000400000000044000044000000004400004400000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1520,11 +1249,11 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 bbbbbbbbbbbbbbbbbbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 bbbbbbbbbbbbbbbbbbbbbbbb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-b4bb33bb33bbb4bbbbb4bb3300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-34434443444334434334434400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-43434444444443434443434400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-44444544454444444444444500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-44444444444444444444444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+b4bb33bb33bbb4bbbbb5bb3300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+34434443444334434544434400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+43434454444453434344444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+44444354454444444444444500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+44444444445444444443444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 45444454445445445445444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1534,12 +1263,30 @@ b4bb33bb33bbb4bbbbb4bb3300000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-bbbbbbbbbbbbbbbbbbbb00bbb0bbbbbbbbb00bbbbbbb000bbb00bbbbbbbbb0bb0000000000000000000000000000000000000000000000000000000000000000
-b11111111111111bb11111111011111bb11100111111111bb11001111111101b0000000000000000000000000000000000000000000000000000000000000000
-b11111111111111bb11111110111111bb11110111111111bb11101111111101b0000000000000000000000000000000000000000000000000000000000000000
-b11111111111111bb11111110111111bb11110011111111bb11111111111101b0000000000000000000000000000000000000000000000000000000000000000
-b11111111111111bb11111100111111bb11111011111111bb1111111111100100000000000000000000000000000000000000000000000000000000000000000
-bbbbbbbbbbbbbbbbbbbbbbb0bbbbb00bb00bbb00bbbbbbbbbbbb00bbbbbb0bb00000000000000000000000000000000000000000000000000000000000000000
+bbbbbbbbbbbbbbbbbbbb00bbb0bbbbbbbbb00bbbbbbb000bbb00bbbbbbbbb0bb0000000000000000000000000000000000000066666666600000000000000000
+b11111111111111bb11111111011111bb11100111111111bb11001111111101b0000066666666000000000000666660000000677777777660000666666000000
+b11111111111111bb11111110111111bb11110111111111bb11101111111101b0666667777777600066666006677760000006677777777760066677777600000
+b11111111111111bb11111110111111bb11110011111111bb11111111111101b6677767777777660677776606777776006666777777777760067777777666660
+b11111111111111bb11111100111111bb11111011111111bb1111111111100106777777777777760677777666777776067777777777777760067777777677766
+bbbbbbbbbbbbbbbbbbbbbbb0bbbbb00bb00bbb00bbbbbbbbbbbb00bbbbbb0bb06677777777777760677777767777776067777777777777660067777777777776
+00000000000000000000000000000000000000000000000000000000000000000667777777777760677777777777776067777777777776600067777777777776
+00000000000000000000000000000000000000000000000000000000000000000066777777777660677777777777776067777777777766600066777777777776
+00000000000000000000000000000000000000000000000000000000000000000666777777777766677777777776666066777777777777600006777777777776
+00000000000000000000000000000000000000000000000000000000000000006677777777777776666777777776600066777777777777600066777777777766
+00000000000000000000000000000000000000000000000000000000000000006777777777777776006677777777660066667777777777600667777777777676
+00000000000000000000000000000000000000000000000000000000000000006677777777777776006677777777760067777777667776600677777777777776
+00000000000000000000000000000000000000000000000000000000000000000677777777777776006777777777760067777777666766000067777766777776
+00000000000000000000000000000000000000000000000000000000000000000667777777776666006777777777660067777776606660000066677666777760
+00000000000000000000000000000000000000000000000000000000000000000066666777766000006677777776600067777666600000000000666600667600
+00000000000000000000000000000000000000000000000000000000000000000000006666660000000666666666000006666666000000000000000000066600
+00000000000000000000000000000000000440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00001000000100000011110000000790000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000110000001100001aaaa1000007a00000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00011000000110001aa77aa10007a000007887000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00111100001111001a7aa9a100aaaaa0078888700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00111100001111001a7aa9a10000a900078888700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+011111100111111001a99a10000a9000078888700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+11111111111111110011110000a90000007777000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1550,88 +1297,120 @@ bbbbbbbbbbbbbbbbbbbbbbb0bbbbb00bb00bbb00bbbbbbbbbbbb00bbbbbb0bb00000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000790000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00001000000100000011110000007a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000110000001100001aaaa100007a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00011000000110001aa77aa100aaaaa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00111100001111001a7aa9a10000a900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00111100001111001a7aa9a1000a9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-011111100111111001a99a1000a90000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-11111111111111110011110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+05444444450444444440004442044440044444444405444444450444405444004445044440000000000005444004445044440544444444444440544444445000
+049aaaaa94049aaaaa44004a94049a4054aaa9aa94049aaaaa9404994049a4004a940499400000000000049a4004a9404994049aaaaaaa9aa94059aaaaa94500
+04aaaaaaa404aaaaaaa4504aa404aa4059aaaaaaa404aaaaaaa404aa404aa9009aa404aa40000000000004aa4059aa404aa404aaaaaaaaaaaa404aaaaaaa9400
+049a99944404aa944aa9504aa404aa4059aa449aa4049a99444404aa4049a9004aa404aa40000000000004aa4004a9404aa4049a9449a449aa4059aa449aa400
+049a94000004aa4049a9504aa404aa4059a9424aa4049a44000004aa4049a9004a9404aa40000000000004aa4059a9404aa4049a44249424aa4049a9204aa400
+04494500000499404494504994049940549450499404994000000499404994004994049940000000000004994004994049940449400494049940549450499400
+04444500000444404444504444044440544420444404444000000444404444004444044440000000000004444054444044440444450444044440444450444400
+04444500000444404444504444044440544450444404444000000444404444004444044440000000000004444004444044440444400444044440244450444400
+04444500000444404444504444044440544450444404444000000444404444004444044440000000000004444054444044440444450444044440444450444400
+04444500000444404444504444044440544450444404444000000444404444004444044440000000000004444054444044440444400444044440444450444400
+04444500000444404444504444044440544420444404444000000444404444004444044440000000000004444054444044440444450444044440444425444400
+04444500000444444444004444044440544450444404444500000444444444504444444440000000000004444054444044440444450444044440444444444400
+04aaa500000aaaaaaaa505aaa909aaa54aaa45aaaa04aaa500001aaaaaaaaa55aaaaaaaa40000000000009aaa55aaa41aaaa14aaa55aa40aaaa14aaaaaaaa400
+04444500000444444445004444044440544440444404444500000444444444504444444440000000000004444054444044440444450444044440444444444000
+04444500000444404444004444044440544440444404444000000444404444500000044440000000000004444054444044440444450444044440444440000000
+04444500000444404444504444044440544450444404444000000444404444500000044440000000000004444054444044440444450000044440444450000000
+04444500000444404444504444044440544450444404444000000444404444500000044440000000000004444054444044440444450000044440544450000000
+04444500000444404444504444044440544420444404444000000444404444500000044440000000000004444054444044440444450000044440444450000000
+04454500000444404454504444044440545450444404444000000444404454500000044440000000000004454054544044440445450000044440545450000000
+04454422400455404454504554445540545450455404554452200455404454500000045540000000522244554054544445540445450000045540445450000000
+04555455440455405554504555555540545450455404555555440455404554500000045540000000455555554054555555540455450000045540555450000000
+04555555540455404554504555555540555540455404555555540455404554500000045540000000455555554054555555540455450000045540455450000000
+04455555440455405454004555555540545450455404455555440455404454000000045540000000455555555004555555540555400000045540545450000000
+05444444450544200444002444444450044400544505444444400244500444000000054450000000544444440004444444450044400000054450044400000000
 __label__
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccc777ccccc77ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-c7c7c7c7cccccc7ccccccccccccccccccccccccccccccccccccccccccccccccccccc777cc77c77cc777ccccc77cc7c7ccccc7c7c77cc7c7cc77cc77c777c777c
-c7c7c7c7cccccc7ccccccccccccccccccccccccccccccccccccccccccccccccccccc777c7c7c7c7c77cccccc77cc777ccccc77cc7c7c7c7c7ccc7c7cc7ccc7cc
-c777c7c7cccccc7ccccccccccccccccccccccccccccccccccccccccccccccccccccc7c7c777c7c7c7ccccccc7c7ccc7ccccc7c7c7c7c7c7ccc7c777cc7ccc7cc
-cc7cc777cc7cc777cccccccccccccccccccccccccccccccccccccccccccccccccccc7c7c7c7c77ccc77ccccc777c77cccccc7c7c7c7cc77c77cc7ccc777c777c
+ccccc111ccccc111cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c1c1c1c1ccccccc1cccccccccccccccccccccccccccccccccccccccccccccccccccc111cc11c11cc111ccccc11cc1c1ccccc1c1c11cc1c1cc11cc11c111c111c
+c1c1c1c1cccccc11cccccccccccccccccccccccccccccccccccccccccccccccccccc111c1c1c1c1c11cccccc11cc111ccccc11cc1c1c1c1c1ccc1c1cc1ccc1cc
+c111c1c1ccccccc1cccccccccccccccccccccccccccccccccccccccccccccccccccc1c1c111c1c1c1ccccccc1c1ccc1ccccc1c1c1c1c1c1ccc1c111cc1ccc1cc
+cc1cc111cc1cc111cccccccccccccccccccccccccccccccccccccccccccccccccccc1c1c1c1c11ccc11ccccc111c11cccccc1c1c1c1cc11c11cc1ccc111c111c
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000099099909090990009909090909000009990909099909990000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000900090909090909090009090909000000900909099909090000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000900099009090909090009990999000000900909090909990000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000900090909090909090009090009000000900909090909000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000099090900990909009909090999000009900099090909000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000006606600666006600660000060600000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000060606060660060006000000006000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000066606600600000600060000006000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000060006060066066006600000060600000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000666660000000666660000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000006660066000006600666000006660066000006660066060606660000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000006600066000006600066000000600606000006660606060606600000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000006660066000006600666000000600606000006060606066606000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000666660000000666660000000600660000006060660006000660000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbbbccbbbbbbbcccbcccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb111cc111111111bcccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb1111c111111111bcccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb1111cc11111111bcccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb11111c11111111bcccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbccbbbccbbbbbbbbcccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cc544444445c44444444ccc4442c4444cc444444444c544444445c4444c5444cc4445c4444cccccccccccc5444cc4445c4444c54444444444444c544444445cc
+cc49aaaaa94c49aaaaa44cc4a94c49a4c54aaa9aa94c49aaaaa94c4994c49a4cc4a94c4994cccccccccccc49a4cc4a94c4994c49aaaaaaa9aa94c59aaaaa945c
+cc4aaaaaaa4c4aaaaaaa45c4aa4c4aa4c59aaaaaaa4c4aaaaaaa4c4aa4c4aa9cc9aa4c4aa4cccccccccccc4aa4c59aa4c4aa4c4aaaaaaaaaaaa4c4aaaaaaa94c
+cc49a999444c4aa944aa95c4aa4c4aa4c59aa449aa4c49a994444c4aa4c49a9cc4aa4c4aa4cccccccccccc4aa4cc4a94c4aa4c49a9449a449aa4c59aa449aa4c
+cc49a94ccccc4aa4c49a95c4aa4c4aa4c59a9424aa4c49a44ccccc4aa4c49a9cc4a94c4aa4cccccccccccc4aa4c59a94c4aa4c49a44249424aa4c49a92c4aa4c
+cc44945ccccc4994c44945c4994c4994c54945c4994c4994cccccc4994c4994cc4994c4994cccccccccccc4994cc4994c4994c4494cc494c4994c54945c4994c
+cc44445ccccc4444c44445c4444c4444c54442c4444c4444cccccc4444c4444cc4444c4444cccccccccccc4444c54444c4444c44445c444c4444c44445c4444c
+cc44445ccccc4444c44445c4444c4444c54445c4444c4444cccccc4444c4444cc4444c4444cccccccccccc4444cc4444c4444c4444cc444c4444c24445c4444c
+cc44445ccccc4444c44445c4444c4444c54445c4444c4444cccccc4444c4444cc4444c4444cccccccccccc4444c54444c4444c44445c444c4444c44445c4444c
+cc44445ccccc4444c44445c4444c4444c54445c4444c4444cccccc4444c4444cc4444c4444cccccccccccc4444c54444c4444c4444cc444c4444c44445c4444c
+cc44445ccccc4444c44445c4444c4444c54442c4444c4444cccccc4444c4444cc4444c4444cccccccccccc4444c54444c4444c44445c444c4444c4444254444c
+cc44445ccccc444444444cc4444c4444c54445c4444c44445ccccc4444444445c444444444cccccccccccc4444c54444c4444c44445c444c4444c4444444444c
+cc4aaa5cccccaaaaaaaa5c5aaa9c9aaa54aaa45aaaac4aaa5cccc1aaaaaaaaa55aaaaaaaa4cccccccccccc9aaa55aaa41aaaa14aaa55aa4caaaa14aaaaaaaa4c
+cc44445ccccc444444445cc4444c4444c54444c4444c44445ccccc4444444445c444444444cccccccccccc4444c54444c4444c44445c444c4444c444444444cc
+cc44445ccccc4444c4444cc4444c4444c54444c4444c4444cccccc4444c44445cccccc4444cccccccccccc4444c54444c4444c44445c444c4444c44444cccccc
+cc44445ccccc4444c44445c4444c4444c54445c4444c4444cccccc4444c44445cccccc4444cccccccccccc4444c54444c4444c44445ccccc4444c44445cccccc
+cc44445ccccc4444c44445c4444c4444c54445c4444c4444cccccc4444c44445cccccc4444cccccccccccc4444c54444c4444c44445ccccc4444c54445cccccc
+cc44445ccccc4444c44445c4444c4444c54442c4444c4444cccccc4444c44445cccccc4444ccccc666666c4444c54444c4444c44445ccccc4444c44445cccccc
+cc44545ccccc4444c44545c4444c4444c54545c4444c4444cccccc4444c44545cccccc4444666c6777776c4454c54544c4444c44545ccccc4444c54545cccccc
+cc44544224cc4554c44545c455444554c54545c4554c45544522cc4554c44545cccccc45547766677522244554c5454444554c44545ccccc4554c44545cccccc
+c6455545544c4554c55545c455555554c54545c4554c455555544c4554c45545cccccc45547776677455555554c5455555554c45545ccccc4554c55545cccccc
+c645555555464554c45545c455555554c55554c4554c455555554c4554c45545cccccc45547777677455555554c5455555554c45545ccccc4554c45545cccccc
+c644555554474554c5454cc455555554c54545c4554c445555544c4554c4454ccccccc45547777777455555555cc455555554c5554cccccc4554c54545cccccc
+c654444444575442cc444cc244444445cc444cc5445c54444444cc2445cc444ccccccc5445777777754444444ccc444444445cc444cccccc5445cc444ccccccc
+c67777777777776cccccccccccccccccccccccccccccccccccccccccccccccccccccccc677777777776666cccccccccccccccccccccccccccccccccccccccccc
+c66777777777776cccccccccccccccccccccccccccccc666666cccccccccccccccccccc6667777777766cccccccccccccccccccccccccccccccccccccccccccc
+cc6777777777776cccccccccccccccccccccccccccc666777776ccccccccccccccccccccc667777777766ccccccccccccccccccccccccccccccccccccccccccc
+c66777777777766cccccccccccccccccccccccccccc67777777666666cccccccccccccccc667777777776ccccccccccccccccccccccccccccccccccccccccccc
+66777777777766ccccccccccccccccccccccc11111c67777711111776cccccccccccccccc677777777776ccccccccccccccccccccccccccccccccccccccccccc
+6777777777666ccccccccccccccccccccccc111cc1167777117711176ccc111cc11ccccc111771171716111ccccccccccccccccccccccccccccccccccccccccc
+c67777766776cccccccccccccccccccccccc11ccc1167777117771176cccc1cc1c1ccccc11171717171611cccccccccccccccccccccccccccccccccccccccccc
+c666776667776ccccccccccccccccccccccc111cc1166777117711176cccc1cc1c1ccccc1c161616111c1ccccccccccccccccccccccccccccccccccccccccccc
+ccc6666cc6676cccccccccccccccccccccccc11111cc6777711111776cccc1cc11cccccc1c1c11ccc1ccc11ccccccccccccccccccccccccccccccccccccccccc
+cccccccccc666cccccccccccccccccccccccccccccc66777777777766ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccc66777777777766cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccc6777777777661c1ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc11c11cc111cc117711667761c1ccccc111cc11cccccc11c111cc11c11cc111ccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccc1c1c1c1c11cc16661766677761ccccccc1cc1c1ccccc1cccc1cc1c1c1c1cc1cccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccc111c11cc1ccccc16661cc6671c1cccccc1cc1c1ccccccc1cc1cc111c11ccc1cccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccc1ccc1c1cc11c11cc11cccc661c1cccccc1cc11cccccc11ccc1cc1c1c1c1cc1cccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbbbbbbbbbbbbbbbbcccccccccccc
+ccccccccccccccccccccccbbccbbbbbbbbbcbbcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccb11cc11111111c1bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccb111c11111111c1bccccccccccccccccccccc444cccc444ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccb111111111111c1bcccccccccccccccccccc49a944449a94cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccb11111111111cc1cccccccccccccccccccc4aaaa9999aaaa4ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccbbbbccbbbbbbcbbcccccccccccccccccccc4a9a9aaaa9aaa4ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaa9aaaaa94ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaaaaaa94cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaaaaaaa4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccc4c4aa1aaaa1aa4c4cccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc44aa1aaaa1aa44ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aeea11aeea4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaaaaaaa4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4a9aaaaaaaa4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc49aaaaaaaa94cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4444444444ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4cccc4ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc44cccc44ccccccccccccccccccccccccccccccccbbbbbbbbbbbbbbbbcccccccccccc
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb11111111111111bcccccccccccc
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb11111111111111bcccccccccccc
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb11111111111111bcccccccccccc
@@ -1648,30 +1427,30 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ccccccccccccccccccccccccccccccccccccccbbbbbbbbbbbbbbbbcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccb11111111111111bccccc444cccc444ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccb11111111111111bcccc49a944449a94cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccb11111111111111bccc4aaaa9999aaaa4ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccb11111111111111bccc4a9a9aaaa9aaa4ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccbbbbbbbbbbbbbbbbccc4aaaaa9aaaaa94ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaaaaaa94cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaaaaaaa4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccc4c4aa1aaaa1aa4c4cccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc44aa1aaaa1aa44ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aeea11aeea4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4aaaaaaaaaa4cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4a9aaaaaaaa4ccccccbbbbccbbbcbbbbbbcccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccc49aaaaaaaa94ccccccb11111111c11111bcccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4444444444cccccccb1111111c111111bcccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc4cccc4cccccccccb1111111c111111bcccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc44cccc44ccccccccb111111cc111111bcccccccccccccccccccccccccccccccccccc
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbbbbbbbcbbbbbccbcccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccbbbbbbbbbbbbbbbbcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-ccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccb11111111111111b66666ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccbbbbbbbbbbbbbbbb77776ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccc67777777777776ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccc67777777777776ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccc66777777777776ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccccc6777777777776ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccccc66777777777766cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc66666
+cccccccccccccccccccccccccccccccccccccccccccc66777777777766cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc6666667777
+cccccccccccccccccccccccccccccccccccccccccccc6777777777666cccccccccccccccccccbbbbccbbbcbbbbbbcccccccccccccccccccccccccc6777767777
+ccccccccccccccccccccccccccccccccccccccccccccc67777766776ccccccccccccccccccccb11111111c11111bcccccccccccccccccccccccccc6777777777
+ccccccccccccccccccccccccccccccccccccccccccccc666776667776cccccccccccccccccccb1111111c111111bcccccccccccccccccccccccccc6677777777
+ccccccccccccccccccccccccccccccccccccccccccccccc6666cc6676cccccccccccccccccccb1111111c111111bccccccccccccccccccccccccccc667777777
+cccccccccccccccccccccccccccccccccccccccccccccccccccccc666cccccccccccccccccccb111111cc111111bcccccccccccccccccccccccccccc66777777
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccbbbbbbbcbbbbbccbccccccccccccccccccccccccccc666777777
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc6677777777
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc6777777777
+ccccccccbbbbbbbbbbbbbbbbcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc6677777777
+ccccccccb11111111111111bccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc677777777
+ccccccccb11111111111111bccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc667777777
+ccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc66666777
+ccccccccb11111111111111bcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc6666
 ccccccccbbbbbbbbbbbbbbbbcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1681,12 +1460,12 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-b4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bbb4bb33bb
-34434443344344433443444334434443344344433443444334434443344344433443444334434443344344433443444334434443344344433443444334434443
-43434444434344444343444443434444434344444343444443434444434344444343444443434444434344444343444443434444434344444343444443434444
-44444544444445444444454444444544444445444444454444444544444445444444454444444544444445444444454444444544444445444444454444444544
-44444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444
-45444454454444544544445445444454454444544544445445444454454444544544445445444454454444544544445445444454454444544544445445444454
+b4bb33bb33bbb4bbbbb5bb33b4bb33bb33bbb4bbbbb5bb33b4bb33bb33bbb4bbbbb5bb33b4bb33bb33bbb4bbbbb5bb33b4bb33bb33bbb4bbbbb5bb33b4bb33bb
+34434443444334434544434434434443444334434544434434434443444334434544434434434443444334434544434434434443444334434544434434434443
+43434454444453434344444443434454444453434344444443434454444453434344444443434454444453434344444443434454444453434344444443434454
+44444354454444444444444544444354454444444444444544444354454444444444444544444354454444444444444544444354454444444444444544444354
+44444444445444444443444444444444445444444443444444444444445444444443444444444444445444444443444444444444445444444443444444444444
+45444454445445445445444445444454445445445445444445444454445445445445444445444454445445445445444445444454445445445445444445444454
 
 __sfx__
 000100000000000000000000040005400017500375005750077500a7500e75011750137501575016750187501775015750127500f7500b7500975007750057500475001750007500350002f0001f000000000000
